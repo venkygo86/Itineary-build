@@ -1,0 +1,49 @@
+from flask import Flask, render_template, request, redirect, url_for
+import sqlite3
+
+app = Flask(__name__)
+
+def get_db():
+    conn = sqlite3.connect('itinerary.db')
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/itinerary', methods=['POST'])
+def itinerary():
+    destination = request.form['destination']
+    start_date = request.form['start_date']
+    end_date = request.form['end_date']
+    dep_flight_details = request.form['dep_flight_details']
+    arr_flight_details = request.form['arr_flight_details']
+
+    db = get_db()
+    db.execute('INSERT INTO itinerary (destination, start_date, end_date, dep_flight_details, arr_flight_details) VALUES (?, ?, ?, ?, ?)',
+               [destination, start_date, end_date, dep_flight_details, arr_flight_details])
+    db.commit()
+
+    return redirect(url_for('view_itinerary', destination=destination, start_date=start_date, end_date=end_date))
+
+@app.route('/itinerary/<destination>/<start_date>/<end_date>')
+def view_itinerary(destination, start_date, end_date):
+    db = get_db()
+    itinerary = db.execute('SELECT * FROM itinerary WHERE destination=? AND start_date=? AND end_date=?',
+                           [destination, start_date, end_date]).fetchone()
+
+    hotel_info = []
+    ground_transport = []
+    activities = []
+
+    for day in range(int(end_date) - int(start_date) + 1):
+        date = str(int(start_date) + day)
+        hotel_info.append(db.execute('SELECT * FROM hotel WHERE itinerary_id=? AND date=?', [itinerary['id'], date]).fetchone())
+        ground_transport.append(db.execute('SELECT * FROM transport WHERE itinerary_id=? AND date=?', [itinerary['id'], date]).fetchone())
+        activities.append(db.execute('SELECT * FROM activities WHERE itinerary_id=? AND date=?', [itinerary['id'], date]).fetchone())
+
+    return render_template('itinerary.html', itinerary=itinerary, hotel_info=hotel_info, ground_transport=ground_transport, activities=activities)
+
+if __name__ == '__main__':
+    app.run(debug=True)
